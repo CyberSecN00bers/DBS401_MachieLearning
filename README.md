@@ -1,1 +1,1 @@
-# DBS401_MachieLearning
+# DBS401_MachineLearning
