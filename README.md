@@ -2,6 +2,10 @@
 
 An automatically penetration testing tool for database implementations using deepagent.
 
+## Disclaimer — Authorized Use Required
+
+This security testing tool is intended solely for educational, research, and authorized penetration testing purposes. You must obtain explicit, written permission from the owner of any system, network, or data before testing. The authors and distributors of this tool are not responsible for any damage or legal consequences resulting from unauthorized or improper use. Use of this tool is at your own risk and must comply with all applicable laws and policies. If you are unsure whether you have authorization, stop and obtain written consent before proceeding.
+
 ## Installation and Usage
 
 ```bash

