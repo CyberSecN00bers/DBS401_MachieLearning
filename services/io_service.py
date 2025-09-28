@@ -91,11 +91,11 @@ def print_menu(menu_items: list[str], title: str) -> None:
 def print_todo_list_and_status(todo_list: list[dict]) -> None:
     # Print title
     print(f"{Fore.CYAN}Todo List:{Style.RESET_ALL}")
-    for item in todo_list:
+    for idx, item in enumerate(todo_list, start=1):
         status_color = Fore.GREEN if item.get("status") == "completed" else Fore.YELLOW
-        print(
-            f"  - [{status_color}{item.get('status').upper()}{Style.RESET_ALL}<:25]{item.get('content')}"
-        )
+        status_badge = "✅" if item.get("status") == "completed" else "⏳"
+        status = f"[{status_badge} {status_color}{item.get('status').upper()}{Style.RESET_ALL}]"
+        print(f"  {idx}. {status:<30} {item.get('content')}")
 
 
 def render_markdown(message: str, prefix: str = "  - "):
@@ -128,7 +128,7 @@ def print_tool_calls(tool_calls: list[dict]):
         print(f"  - {tool_call}")
 
 
-def print_format_chunk(chunk: dict) -> None:
+def print_format_chunk(chunk) -> dict:
     chunk_src = list(chunk.keys())[0]
     match chunk_src:
         case "model_request":
@@ -143,12 +143,14 @@ def print_format_chunk(chunk: dict) -> None:
                 if tool_calls:
                     print_tool_calls(tool_calls)
         case "tools":
-            print(f"{Fore.CYAN}Tools: {Style.RESET_ALL}")
+            # print(f"{Fore.CYAN}Tools: {Style.RESET_ALL}")
             for tool in chunk["tools"]:
                 if tool == "todos":
-                    print_todo_list_and_status(chunk["tools"][tool])
+                    # print_todo_list_and_status(chunk["tools"][tool])
                     continue
-                rich.print(f"  - {tool}")
+                if tool == "messages":
+                    continue
+                rich.print(f"  - {tool}: {chunk['tools'][tool]}")
         case "SummarizationMiddleware.before_model":
             if chunk["SummarizationMiddleware.before_model"]:
                 print(
@@ -169,6 +171,8 @@ def print_format_chunk(chunk: dict) -> None:
                     rich.print(value.get("description"))
         case _:
             rich.print(chunk)
+
+    return chunk
 
 
 # Python obfuscation by freecodingtools.org

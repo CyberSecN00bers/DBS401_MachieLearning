@@ -6,17 +6,31 @@ from utils.system_check import check_system
 from services.io_service import safe_input, banner, safe_parse_int_input, notify
 from utils.installer import install_dependencies
 from services.validator_service import is_valid_ip, is_valid_url
-from agent.pentest import build_agent, run_interactive_scan
-from agent.prompt.master_instruction import USER_PROMPT_TEMPLATE
-from configs.app_configs import AppConfig
 
+# from agent.pentest import build_agent, run_interactive_scan
+from agent.prompt.master_instruction import USER_PROMPT_TEMPLATE, SYSTEM_PROMPT
+from configs.app_configs import AppConfig
+from agent.orchestrator import (
+    make_subagents,
+    run_orchestration,
+    build_deep_agent_with_subagents,
+)
+
+# Tools
+from tools.nmap import nmap_tool
+from tools.sqlmap import sqlmap_tool
+from tools.mssql import mssql_agent_tool
+
+
+# ================================================= setup =================================================
 SYSTEM_INFO = check_system()
 install_dependencies(
     SYSTEM_INFO["missing_system_packages"], SYSTEM_INFO["missing_python_packages"]
 )
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
+
+# logging.basicConfig(level=logging.DEBUG)
 
 
 # ================================================= banner =================================================
@@ -25,7 +39,7 @@ config = AppConfig()
 banner()
 
 # ================================================= main =================================================
-agent = build_agent()
+# agent = build_agent()
 
 # Operator must explicitly confirm they have permission to test the target.
 io = safe_input(
@@ -36,7 +50,9 @@ if ok not in ("y", "yes"):
     notify("Authorization not confirmed. Exiting.")
     exit(1)
 
-host = safe_input("Enter the target host (e.g., 192.168.1.100):", is_valid_ip, "127.0.0.1")
+host = safe_input(
+    "Enter the target host (e.g., 192.168.1.100):", is_valid_ip, "127.0.0.1"
+)
 port = safe_parse_int_input(
     "Enter the target port (e.g., 1433):", min_value=1, max_value=65535, default=1433
 )
@@ -56,4 +72,10 @@ prompt = USER_PROMPT_TEMPLATE.format(
     web_service="",
 )
 
-run_interactive_scan(agent, prompt)
+# run_interactive_scan(agent, prompt)
+
+subagents = make_subagents()
+all_tools = [nmap_tool, sqlmap_tool, mssql_agent_tool]
+
+agent = build_deep_agent_with_subagents(all_tools, SYSTEM_PROMPT, subagents)
+run_orchestration(agent, prompt)
