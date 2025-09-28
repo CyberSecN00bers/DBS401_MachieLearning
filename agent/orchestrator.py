@@ -100,7 +100,7 @@ def run_orchestration(agent, high_level_prompt: str):
     For each proposed tool call we append audit entries and resume the agent with the operator decision.
     """
     # Start streaming the agent until it pauses for HITL
-    config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+    config = {"configurable": {"thread_id": str(uuid.uuid4())}, "recursion_limit": 100}
     next_input = {"messages": [{"role": "user", "content": high_level_prompt}]}
 
     while True:
