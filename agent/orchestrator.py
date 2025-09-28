@@ -37,6 +37,7 @@ from services.io_service import (
     safe_parse_int_input,
     print_menu,
     notify,
+    LogLevel,
     print_format_chunk,
 )
 from agent.subagent import (
@@ -111,27 +112,38 @@ def run_orchestration(agent, target: str):
 
     # Start streaming the agent until it pauses for HITL
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}
-    stream_iter = agent.stream(
-        {"messages": [{"role": "user", "content": high_level_prompt}]}, config=config
-    )
+    next_input = {"messages": [{"role": "user", "content": high_level_prompt}]}
+    # stream_iter = agent.stream(
+    #     {"messages": [{"role": "user", "content": high_level_prompt}]}, config=config
+    # )
 
-    for chunk in stream_iter:
-        # print("STREAM->", chunk)
-        print_format_chunk(chunk)
-        
-        needs_approval = False
+    while True:
+        last_chunk = None
+        for chunk in agent.stream(next_input, config=config):
+            # print("STREAM->", chunk)
+            print_format_chunk(chunk)
+            last_chunk = chunk
+
+        if last_chunk is None:
+            print("No chunks produced. Agent probably finished or returned nothing.")
+            break
+
         try:
-            if isinstance(chunk, dict) and chunk.get("__interrupt__"):
-                needs_approval = True
+            if isinstance(chunk, dict) and "__interrupt__" in chunk:
+                pass
+            else:
+                notify(
+                    "End of the stream. But it doesn't have a Interrupt chunk.", LogLevel.ERROR
+                )
+                break
         except Exception:
-            pass
+            raise
+            exit(1)
 
-        if needs_approval:
-            # Prompt operator
-            resume_payload = HumanInTheLoopService.prompt_human_for_resume_cli()
+        resume_payload = HumanInTheLoopService.prompt_human_for_resume_cli()
 
-            # Resume the agent with the operator's decision
-            stream_iter = agent.stream(Command(resume=resume_payload), config=config)
+        # Resume the agent with the operator's decision
+        next_input = Command(resume=resume_payload)
 
     print("Top-level orchestration complete.")
 

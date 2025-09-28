@@ -94,7 +94,7 @@ def print_todo_list_and_status(todo_list: list[dict]) -> None:
     for item in todo_list:
         status_color = Fore.GREEN if item.get("status") == "completed" else Fore.YELLOW
         print(
-            f"  - {item.get('content'):<35}[{status_color}{item.get('status').upper()}{Style.RESET_ALL}]"
+            f"  - [{status_color}{item.get('status').upper()}{Style.RESET_ALL}<:25]{item.get('content')}"
         )
 
 
@@ -158,9 +158,9 @@ def print_format_chunk(chunk: dict) -> None:
         case "HumanInTheLoopMiddleware.after_model":
             if chunk["HumanInTheLoopMiddleware.after_model"]:
                 print(
-                    f"{Fore.CYAN} SummarizationMiddleware Before Model Hook: {Style.RESET_ALL}"
+                    f"{Fore.CYAN} HumanInTheLoopMiddleware After Model Hook: {Style.RESET_ALL}"
                 )
-                rich.print(chunk["SummarizationMiddleware.after_model"])
+                rich.print(chunk["HumanInTheLoopMiddleware.after_model"])
         case "__interrupt__":
             print(f"{Fore.CYAN}Interrupts: {Style.RESET_ALL}")
             interrupts = chunk["__interrupt__"]
