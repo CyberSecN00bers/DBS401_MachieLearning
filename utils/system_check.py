@@ -14,13 +14,56 @@ def check_system() -> Dict[str, Any]:
         "python_version": platform.python_version(),
     }
 
-    # Check for required binaries
+    # Check for required system packages
     dependencies = get_dependencies()
-    missing_binaries = []
-    for binary in dependencies["binaries"]:
-        if not which(binary):
-            missing_binaries.append(binary)
-    info["missing_binaries"] = missing_binaries
+    missing_system_packages = []
+
+    for package in dependencies["system_packages"]:
+        if platform.system() == "Windows":
+            # Check installed programs on Windows
+            try:
+                result = subprocess.run(
+                    ["powershell", "-Command", f"Get-Package -Name {package}"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                if result.returncode != 0:
+                    missing_system_packages.append(package)
+            except FileNotFoundError:
+                missing_system_packages.append(package)
+        elif platform.system() == "Linux":
+            # Check installed packages on Linux (Debian-based example)
+            try:
+                result = subprocess.run(
+                    ["dpkg", "-l", package],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                if result.returncode != 0:
+                    missing_system_packages.append(package)
+            except FileNotFoundError:
+                missing_system_packages.append(package)
+        elif platform.system() == "Darwin":
+            # Check installed packages on macOS
+            try:
+                result = subprocess.run(
+                    ["brew", "list", package],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                if result.returncode != 0:
+                    missing_system_packages.append(package)
+            except FileNotFoundError:
+                missing_system_packages.append(package)
+        else:
+            # Fallback to `which` for unknown platforms
+            if not which(package):
+                missing_system_packages.append(package)
+
+    info["missing_system_packages"] = missing_system_packages
 
     # Check for required Python packages
     missing_packages = []
