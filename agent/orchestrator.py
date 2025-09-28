@@ -93,29 +93,15 @@ def build_deep_agent_with_subagents(
     return agent
 
 
-def run_orchestration(agent, target: str):
+def run_orchestration(agent, high_level_prompt: str):
     """Run the main agent interactively. The main agent will call subagents (by name) for specific phases.
 
     This function listens for interrupts (proposed tool calls) and forces operator approval.
     For each proposed tool call we append audit entries and resume the agent with the operator decision.
     """
-    if not target:
-        raise ValueError("target is required")
-
-    # Start the top-level agent with a high-level prompt instructing it to use subagents
-    high_level_prompt = (
-        f"You are a penetration testing coordinator for an authorized MSSQL assessment. "
-        f"Target: {target}. Use your subagents (recon, enumeration, vuln_scan, exploitation, postex, persistence, reporting) "
-        f"to perform the phases in order. ALWAYS pause for human approval before executing any destructive actions or exploit attempts. "
-        f"Log all actions into the audit log and attach evidence to reporting."
-    )
-
     # Start streaming the agent until it pauses for HITL
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}
     next_input = {"messages": [{"role": "user", "content": high_level_prompt}]}
-    # stream_iter = agent.stream(
-    #     {"messages": [{"role": "user", "content": high_level_prompt}]}, config=config
-    # )
 
     while True:
         last_chunk = None
@@ -133,7 +119,8 @@ def run_orchestration(agent, target: str):
                 pass
             else:
                 notify(
-                    "End of the stream. But it doesn't have a Interrupt chunk.", LogLevel.ERROR
+                    "End of the stream. But it doesn't have a Interrupt chunk.",
+                    LogLevel.ERROR,
                 )
                 break
         except Exception:

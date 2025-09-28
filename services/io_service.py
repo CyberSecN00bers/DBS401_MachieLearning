@@ -148,7 +148,7 @@ def print_format_chunk(chunk: dict) -> None:
                 if tool == "todos":
                     print_todo_list_and_status(chunk["tools"][tool])
                     continue
-                rich.print(f"  - {tool}")
+                rich.print(f"  - {tool}: {chunk['tools'][tool]}")
         case "SummarizationMiddleware.before_model":
             if chunk["SummarizationMiddleware.before_model"]:
                 print(
