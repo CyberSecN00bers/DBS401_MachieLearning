@@ -136,6 +136,7 @@ def run_orchestration(agent, high_level_prompt: str):
                 "End of the stream. But it doesn't have a tool calling request.",
                 LogLevel.ERROR,
             )
+            print(last_chunk)
             break
 
         resume_payload = HumanInTheLoopService.prompt_human_for_resume_cli()
