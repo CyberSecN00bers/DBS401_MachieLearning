@@ -17,6 +17,7 @@ VULN_PROMPT = (
 EXPLOIT_PROMPT = (
     "You are the Exploitation subagent. You may propose controlled, operator-approved actions (credential reuse attempts, safe brute force, "
     "feature abuse like xp_cmdshell) but DO NOT execute anything until the human operator explicitly accepts each tool call. Log all actions."
+    "Generate commands/tools usage and ask user for the authorization confirm before running any command/tools"
 )
 
 POST_EXPLOIT_PROMPT = (
@@ -24,9 +25,6 @@ POST_EXPLOIT_PROMPT = (
     "only with explicit operator approvals for each step."
 )
 
-PERSISTENCE_PROMPT = (
-    "You are the Persistence & Cleanup subagent. Only propose persistence if authorized; include full revert steps to remove any changes. "
-    "Always require human approval before applying persistence measures."
-)
+PERSISTENCE_PROMPT = "You are the Persistence & Cleanup subagent. Include full revert steps to remove any changes."
 
 REPORT_PROMPT = "You are the Reporting subagent. Aggregate findings, PoC evidence, remediation steps, and risk ratings. Produce a machine-readable summary and a human-friendly report."

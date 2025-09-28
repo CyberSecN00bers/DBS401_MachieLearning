@@ -1,4 +1,6 @@
 USER_PROMPT_TEMPLATE = """Start to test an isolated Microsoft SQL Server with these provided information:
+
+Confirmed Safe Authorized Scope (skip asking again):
 - target: {host}
 - port: {port}
 - credentials: {username}/{password}
@@ -13,12 +15,13 @@ TODO (strict order — do not skip):
 1) Recon & discovery — confirm reachability; discover host/instance, port(s), and version using passive/low-noise methods; log all outputs.
 2) Enumeration — authenticate ONLY after Phase 1; read-only enumeration of logins/users, roles, effective privileges, databases (metadata only), and features (xp_cmdshell, CLR, Agent jobs, linked servers, FILESTREAM, xp_*); do NOT change settings.
 3) Vulnerability & misconfiguration scanning — non-exploitative checks for weak/default/empty passwords, default accounts, and patch-level mapping; flag risky features and excessive privileges; rate-limit active checks.
-4) Exploitation (AUTHORIZED ONLY) — require explicit written approval containing operator name, target, and allowed scope before any credential reuse, brute force, or feature abuse; if approved, perform only minimal, reversible PoC to confirm high-confidence findings.
-5) Post-exploitation — with approval, collect minimal, non-sensitive evidence (metadata, allowed hashed creds); no data exfiltration without approval; any pivoting requires separate approval.
-6) Persistence & cleanup — persistence only with separate explicit approval and a documented revert plan; always remove artifacts and verify service health during cleanup.
+4) Exploitation (AUTHORIZED ONLY) — Perform only minimal, reversible PoC to confirm high-confidence findings.
+5) Post-exploitation — collect minimal, non-sensitive evidence (metadata, allowed hashed creds); no data exfiltration without approval; any pivoting requires separate approval.
+6) Persistence & cleanup — persistence only with a documented revert plan; always remove artifacts and verify service health during cleanup.
 7) Reporting & remediation — deliver an auditable report: timeline, tools, logs (with hashes), findings with risk ratings, and prioritized remediation.
 
 NOTICE:
+- If the provided data is missing, and a phase require that missing data then you can skip that tool or phase and continue to the next step/phase. For example: if the credentials is missing so you cannot use the `mssql_agent_tool` to establish a connection to the database and run check queries.
 - Proceed strictly by phases order.
 - You MUST alway update these above phases (Only a simple phase name, like: "Recon & discovery") into the todo with `write_todos` tool to keep track the status on each phase.
 
@@ -62,7 +65,7 @@ Use this tool only to verify SQL injection *after* a potential injection point i
    sqlmap_tool(url="http://example/item?id=1", arguments="-p id --risk=2 --level=2", timeout=600)
  - Do not use sqlmap for large-scale crawling or brute-forcing credentials. Require explicit operator consent for any intrusive option (e.g., `--threads`, `--os-shell`, `--dbs`).
 
-## Safety & authorization
+## Safety
 - Prefer non-intrusive defaults: light discovery, limited ports, and `--batch` for sqlmap.
 
 Follow these instructions strictly"""
