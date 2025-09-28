@@ -1,4 +1,4 @@
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 from pydantic_settings import SettingsConfigDict
 from pydantic import Field, computed_field
 from typing import Optional
@@ -38,3 +38,4 @@ class AppConfig(BaseSettings):
 if __name__ == "__main__":
     config = AppConfig()
     print("Application Name:", config.APP_NAME)
+    print("Google API Key:", config.GOOGLE_API_KEY)

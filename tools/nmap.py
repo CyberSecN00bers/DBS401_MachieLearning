@@ -217,6 +217,10 @@ def nmap_tool(
         A dictionary with keys like 'success', 'stdout', 'stderr', 'returncode', 'command', 'xml' or
         'result' for python-nmap outputs.
     """
+
+    print("DEBUG: nmap_tool called with", {"target": target, "arguments": arguments, "ports": ports})
+
+
     if not target:
         return {"success": False, "error": "target is required"}
 

@@ -2,24 +2,24 @@ import subprocess
 import sys
 from typing import List
 
-def install_binaries(binaries: List[str]) -> None:
+def install_system_packages(packages: List[str]) -> None:
     """Install missing binaries using the appropriate package manager."""
     platform = sys.platform.lower()
 
-    for binary in binaries:
+    for package in packages:
         try:
             if platform.startswith("linux"):
                 # Assuming Debian-based system
-                subprocess.run(["sudo", "apt", "install", "-y", binary], check=True)
+                subprocess.run(["sudo", "apt", "install", "-y", package], check=True)
             elif platform == "win32":
-                print(f"Please install {binary} manually on Windows.")
+                print(f"Please install {package} manually on Windows.")
             elif platform == "darwin":
                 # macOS
-                subprocess.run(["brew", "install", binary], check=True)
+                subprocess.run(["brew", "install", package], check=True)
             else:
-                print(f"Unsupported platform for installing {binary}: {platform}")
+                print(f"Unsupported platform for installing {package}: {platform}")
         except subprocess.CalledProcessError as e:
-            print(f"Failed to install {binary}: {e}")
+            print(f"Failed to install {package}: {e}")
 
 def install_python_packages(packages: List[str]) -> None:
     """Install missing Python packages using pip."""
@@ -29,11 +29,11 @@ def install_python_packages(packages: List[str]) -> None:
         except subprocess.CalledProcessError as e:
             print(f"Failed to install {package}: {e}")
 
-def install_dependencies(missing_binaries: List[str], missing_packages: List[str]) -> None:
-    """Install missing binaries and Python packages."""
-    if missing_binaries:
-        print("Installing missing binaries...")
-        install_binaries(missing_binaries)
+def install_dependencies(missing_system_packages: List[str], missing_packages: List[str]) -> None:
+    """Install missing system packages and Python packages."""
+    if missing_system_packages:
+        print("Installing missing system packages...")
+        install_system_packages(missing_system_packages)
 
     if missing_packages:
         print("Installing missing Python packages...")
