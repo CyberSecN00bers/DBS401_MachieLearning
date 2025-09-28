@@ -1,11 +1,12 @@
 from services.subagent_service import SubAgentService
 from agent.prompt.subagent_prompt import ENUM_PROMPT
 from tools.nmap import nmap_tool
+from tools.mssql import mssql_agent_tool
 
 NAME = "enumeration"
 DESCRIPTION = "SQL Server enumeration"
 PROMPT = ENUM_PROMPT
-DEFAULT_TOOLS = [nmap_tool]
+DEFAULT_TOOLS = [nmap_tool, mssql_agent_tool]
 
 
 def make_subagent(tools: list = []):

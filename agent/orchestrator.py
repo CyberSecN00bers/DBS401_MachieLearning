@@ -93,6 +93,23 @@ def build_deep_agent_with_subagents(
     return agent
 
 
+def is_tool_calling(chunk: dict) -> bool:
+    try:
+        # Check for interrupt chunk
+        if isinstance(chunk, dict) and "__interrupt__" in chunk:
+            return True
+
+        # Check for tool calling in a model response message
+        if "model_request" in chunk and "messages" in chunk["model_request"]:
+            for message in chunk["model_request"]["messages"]:
+                tool_calls = message.tool_calls
+                if tool_calls:
+                    return True
+        return False
+    except Exception as e:
+        raise e
+
+
 def run_orchestration(agent, high_level_prompt: str):
     """Run the main agent interactively. The main agent will call subagents (by name) for specific phases.
 
@@ -107,25 +124,19 @@ def run_orchestration(agent, high_level_prompt: str):
         last_chunk = None
         for chunk in agent.stream(next_input, config=config):
             # print("STREAM->", chunk)
-            print_format_chunk(chunk)
-            last_chunk = chunk
+            last_chunk = dict(chunk)
+            print_format_chunk(last_chunk)
 
         if last_chunk is None:
             print("No chunks produced. Agent probably finished or returned nothing.")
             break
 
-        try:
-            if isinstance(chunk, dict) and "__interrupt__" in chunk:
-                pass
-            else:
-                notify(
-                    "End of the stream. But it doesn't have a Interrupt chunk.",
-                    LogLevel.ERROR,
-                )
-                break
-        except Exception:
-            raise
-            exit(1)
+        if not is_tool_calling(last_chunk):
+            notify(
+                "End of the stream. But it doesn't have a tool calling request.",
+                LogLevel.ERROR,
+            )
+            break
 
         resume_payload = HumanInTheLoopService.prompt_human_for_resume_cli()
 
@@ -133,36 +144,3 @@ def run_orchestration(agent, high_level_prompt: str):
         next_input = Command(resume=resume_payload)
 
     print("Top-level orchestration complete.")
-
-
-if __name__ == "__main__":
-    print("Multi-subagent DeepAgents HITL runner (corrected to use subagents param)")
-
-    target = input("Enter target (IP/hostname/CIDR): ").strip()
-
-    ok = (
-        input(
-            "Confirm you have written authorization to test the target(s) involved [yes/no]: "
-        )
-        .strip()
-        .lower()
-    )
-    if ok not in ("y", "yes"):
-        print("Authorization not confirmed. Exiting.")
-        exit(1)
-
-    # Build subagents and top-level agent
-    subagents = make_subagents()
-
-    # All tools available at top-level (subagents can choose a subset)
-    all_tools = []
-
-    instructions = (
-        "You are the top-level penetration testing coordinator. Delegate tasks to subagents by calling them by name. "
-        "Each subagent has a specialized prompt and limited toolset. Every tool invocation requires operator approval."
-    )
-
-    agent = build_deep_agent_with_subagents(all_tools, instructions, subagents)
-
-    # Run the orchestration with HITL enforced
-    run_orchestration(agent, target)
