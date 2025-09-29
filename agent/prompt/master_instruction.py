@@ -53,6 +53,9 @@ Run this tool to make a connection to the database to run system assessment comm
   - Look for sensitive stored procedures / modules
   - Log / agent jobs
 
+## `mssql_check_credentials`
+Run this tool to check the connection to the database with provided credentials.
+
 ## `nmap_tool`
 Use this tool for network/service discovery and vulnerability detection via Nmap. Typical uses:
  - Discovery of live hosts and open ports (start with a light scan).
