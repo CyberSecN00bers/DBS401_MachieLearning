@@ -13,5 +13,9 @@ dependencies = [
     "pymssql>=2.3.7",
     "pyodbc>=5.2.0",
     "python-dotenv>=1.1.1",
+    "python-tds",
     "rich>=14.1.0",
 ]
+
+[tool.uv.sources]
+python-tds = { git = "https://github.com/denisenkom/pytds.git" }
