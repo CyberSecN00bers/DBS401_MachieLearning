@@ -46,12 +46,20 @@ Tool for listing files in the virtual filesystem
 Tool for editing a file in the virtual filesystem
 
 ## `mssql_agent_tool`
-Run this tool to make a connection to the database to run system assessment commands from within (If credentials are provided). For example:
-  - Check version
-  - Get login and roles
-  - Check the feature config
-  - Look for sensitive stored procedures / modules
-  - Log / agent jobs
+Connect to a Microsoft SQL Server (only with credentials) and run safe, auditable read-only checks.
+
+Examples (safe):
+* Check version (`check_version`)
+* List databases / tables / logins (`list_databases`, `list_tables`, `logins`)
+* Inspect features (xp_cmdshell, CLR, linked servers)
+* Find agent jobs and sensitive procs
+
+How to use (short):
+* Prefer `intents` for common checks.
+* Use `custom_queries` only with `allow_agent_sql=True` and operator approval (HITL).
+* Default is safe: `dry_run=True`; set `dry_run=False` + approve to execute.
+
+Key params: `host, port, username, password, database, intents, custom_queries, dry_run, allow_agent_sql, allow_destructive, preferred_driver`.
 
 ## `mssql_check_credentials`
 Run this tool to check the connection to the database with provided credentials.
