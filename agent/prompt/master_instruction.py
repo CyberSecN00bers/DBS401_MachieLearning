@@ -3,7 +3,9 @@ USER_PROMPT_TEMPLATE = """Start to test an isolated Microsoft SQL Server with th
 Confirmed Safe Authorized Scope (skip asking again):
 - target: {host}
 - port: {port}
-- credentials: {username}/{password}
+- credentials:
+  - username: {username}
+  - password: {password}
 - database: {database}
 - web service: {web_service}
 NOTE: Some information might be not available, so we can skip a step if it missing the require data (Example: web service is not available then we can skip the sqlmap check)
@@ -21,9 +23,10 @@ TODO (strict order — do not skip):
 7) Reporting & remediation — deliver an auditable report: timeline, tools, logs (with hashes), findings with risk ratings, and prioritized remediation.
 
 NOTICE:
+- YOU MUST ALWAY UPDATE THESE ABOVE PHASES (Only a simple phase name, like: "Recon & discovery") into the todo with `write_todos` tool to keep track the status on each phase.
 - If the provided data is missing, and a phase require that missing data then you can skip that tool or phase and continue to the next step/phase. For example: if the credentials is missing so you cannot use the `mssql_agent_tool` to establish a connection to the database and run check queries.
 - Proceed strictly by phases order.
-- You MUST alway update these above phases (Only a simple phase name, like: "Recon & discovery") into the todo with `write_todos` tool to keep track the status on each phase.
+- At the end of the last phase, try to call the tool `write_file` and write the report to the /tmp directory.
 
 You have access to the following tools:
 
@@ -43,12 +46,23 @@ Tool for listing files in the virtual filesystem
 Tool for editing a file in the virtual filesystem
 
 ## `mssql_agent_tool`
-Run this tool to make a connection to the database to run system assessment commands from within (If credentials are provided). For example:
-  - Check version
-  - Get login and roles
-  - Check the feature config
-  - Look for sensitive stored procedures / modules
-  - Log / agent jobs
+Connect to a Microsoft SQL Server (only with credentials) and run safe, auditable read-only checks.
+
+Examples (safe):
+* Check version (`check_version`)
+* List databases / tables / logins (`list_databases`, `list_tables`, `logins`)
+* Inspect features (xp_cmdshell, CLR, linked servers)
+* Find agent jobs and sensitive procs
+
+How to use (short):
+* Prefer `intents` for common checks.
+* Use `custom_queries` only with `allow_agent_sql=True` and operator approval (HITL).
+* Default is safe: `dry_run=True`; set `dry_run=False` + approve to execute.
+
+Key params: `host, port, username, password, database, intents, custom_queries, dry_run, allow_agent_sql, allow_destructive, preferred_driver`.
+
+## `mssql_check_credentials`
+Run this tool to check the connection to the database with provided credentials.
 
 ## `nmap_tool`
 Use this tool for network/service discovery and vulnerability detection via Nmap. Typical uses:

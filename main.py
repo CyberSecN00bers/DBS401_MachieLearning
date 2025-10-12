@@ -20,6 +20,7 @@ from agent.orchestrator import (
 from tools.nmap import nmap_tool
 from tools.sqlmap import sqlmap_tool
 from tools.mssql import mssql_agent_tool
+from tools.authenticate import mssql_check_credentials
 
 
 # ================================================= setup =================================================
@@ -82,7 +83,7 @@ prompt = USER_PROMPT_TEMPLATE.format(
 # run_interactive_scan(agent, prompt)
 
 subagents = make_subagents()
-all_tools = [nmap_tool, sqlmap_tool, mssql_agent_tool]
+all_tools = [nmap_tool, sqlmap_tool, mssql_agent_tool, mssql_check_credentials]
 
 agent = build_deep_agent_with_subagents(all_tools, SYSTEM_PROMPT, subagents)
 run_orchestration(agent, prompt)

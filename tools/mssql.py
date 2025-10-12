@@ -1,22 +1,48 @@
 """
 MS SQL Server inspection tool (agent-driven queries)
 
-This file implements the safety-first approach to allow an agent to provide SQL queries
-or high-level intents. It focuses on validating agent-supplied SQL and executing it
-in a transaction sandbox (with ROLLBACK) unless explicitly allowed.
+This module uses a safety-first approach that lets an agent provide SQL queries or high-level
+intents while protecting the target from accidental destructive actions.
 
-Security: Read the module docstring in the canvas before enabling agent-driven SQL execution.
+Connection strategy (fallback order):
+ 1. pytds (pure-Python TDS driver) — preferred.
+ 2. pyodbc (ODBC) — supported when an ODBC driver/DSN is available.
+ 3. mssql-python (first-party Microsoft driver / fallback) — tried last if installed.
+
+Behavior:
+ - By default queries are executed inside a transaction sandbox and always ROLLBACK (dry-run).
+ - Agent-supplied SQL is validated with conservative forbidden-pattern checks. Use
+   `allow_agent_sql=True` and `dry_run=False` and `allow_destructive=True` with extreme caution.
+
+Security reminder: Only use this tool against systems you are authorized to test. Audit all
+actions and keep operator approval enabled for any potentially destructive activity.
 """
 
 from __future__ import annotations
 
-import pyodbc
 import traceback
 import re
+import time
 from typing import List, Optional, Dict, Any, Tuple
 
+# Try optional drivers
+try:
+    import pytds
+except Exception:
+    pytds = None
 
-# --- Helpers & safety checks ---
+try:
+    import pyodbc
+except Exception:
+    pyodbc = None
+
+try:
+    import mssql_python as mssql_python
+except Exception:
+    mssql_python = None
+
+
+# --- Safety checks ---
 _FORBIDDEN_PATTERNS = [
     r"\bINSERT\b",
     r"\bUPDATE\b",
@@ -43,66 +69,238 @@ def _is_safe_query(
     allowed_databases: Optional[List[str]] = None,
     allowed_tables: Optional[List[str]] = None,
 ) -> Tuple[bool, List[str]]:
-    """Return (is_safe, reasons) — conservative checks.
-
-    This checks for forbidden tokens and naive whitelist enforcement. It is NOT perfect but
-    prevents the most obvious destructive queries.
-    """
-    reasons = []
+    reasons: List[str] = []
     if not sql or not sql.strip():
         return False, ["empty query"]
 
     if _FORBIDDEN_RE.search(sql):
         reasons.append("contains forbidden keywords or commands")
 
-    # Whitelist checks (optional)
+    # Simple whitelist schema check: look for schema.table occurrences
     if allowed_schemas:
-        # if query mentions schema.table, ensure schema in allowed_schemas
         for match in re.finditer(r"([\w]+)\.[\w]+", sql):
             sch = match.group(1)
             if sch not in allowed_schemas:
                 reasons.append(f"schema '{sch}' not in allowed_schemas")
 
-    if allowed_tables:
-        # naive check omitted — recommend relying on forbidden keywords and whitelists
-        pass
+    # Note: allowed_tables/allowed_databases checks are intentionally conservative and minimal.
 
     is_safe = len(reasons) == 0
     return is_safe, reasons
 
 
+# --- Connection helpers ---
+
+
+def _connect_pytds(
+    host: str,
+    port: Optional[int],
+    username: Optional[str],
+    password: Optional[str],
+    database: Optional[str],
+    timeout_seconds: Optional[int],
+) -> Any:
+    # pytds.connect signature is flexible; we use common keywords
+    if not pytds:
+        raise RuntimeError("pytds not installed")
+    conn_kwargs = {
+        "server": host,
+        "port": port or 1433,
+        "user": username,
+        "password": password,
+        "database": database or None,
+        "autocommit": False,
+    }
+    if timeout_seconds:
+        conn_kwargs["login_timeout"] = int(timeout_seconds)
+    return pytds.connect(**conn_kwargs)
+
+
+def _connect_pyodbc(
+    host: str,
+    port: Optional[int],
+    username: Optional[str],
+    password: Optional[str],
+    database: Optional[str],
+    driver: str,
+    trusted_connection: bool,
+    timeout_seconds: Optional[int],
+) -> Any:
+    if not pyodbc:
+        raise RuntimeError("pyodbc not installed")
+    server = f"{host},{port}" if port else host
+    if trusted_connection:
+        conn_str = f"DRIVER={{{driver}}};SERVER={server};DATABASE={database or 'master'};Trusted_Connection=yes;"
+    else:
+        conn_str = f"DRIVER={{{driver}}};SERVER={server};DATABASE={database or 'master'};UID={username};PWD={password};"
+    # pyodbc.connect accepts autocommit param too, but we rely on manual commit/rollback
+    return pyodbc.connect(conn_str, timeout=int(timeout_seconds or 30))
+
+
+def _connect_mssql_python(
+    host: str,
+    port: Optional[int],
+    username: Optional[str],
+    password: Optional[str],
+    database: Optional[str],
+    timeout_seconds: Optional[int],
+) -> Any:
+    if not mssql_python:
+        raise RuntimeError("mssql-python not installed")
+    # mssql_python has a connect() function; try keyword args first, fallback to connection string
+    try:
+        return mssql_python.connect(
+            host=host,
+            port=port or 1433,
+            user=username,
+            password=password,
+            database=database or None,
+            timeout=int(timeout_seconds or 30),
+        )
+    except TypeError:
+        # Fallback - try building a connection string
+        conn_str = f"Server={host},{port or 1433};Database={database or 'master'};User Id={username};Password={password};TrustServerCertificate=yes;"
+        return mssql_python.connect(conn_str)
+
+
+def _connect_any(
+    host: str,
+    port: Optional[int],
+    username: Optional[str],
+    password: Optional[str],
+    database: Optional[str],
+    driver: Optional[str],
+    trusted_connection: bool,
+    timeout_seconds: Optional[int],
+) -> Tuple[Optional[Any], str, Optional[str]]:
+    """Try to connect using pytds -> pyodbc -> mssql_python. Returns (conn, backend_name, error_str).
+
+    backend_name is one of: 'pytds', 'pyodbc', 'mssql-python'.
+    """
+    errors = []
+    # Try pytds first
+    if pytds:
+        try:
+            conn = _connect_pytds(
+                host, port, username, password, database, timeout_seconds
+            )
+            return conn, "pytds", None
+        except Exception as e:
+            errors.append(f"pytds: {e}")
+
+    # Then try pyodbc (ODBC)
+    if pyodbc:
+        try:
+            conn = _connect_pyodbc(
+                host,
+                port,
+                username,
+                password,
+                database,
+                driver or "ODBC Driver 17 for SQL Server",
+                trusted_connection,
+                timeout_seconds,
+            )
+            return conn, "pyodbc", None
+        except Exception as e:
+            errors.append(f"pyodbc: {e}")
+
+    # Finally try mssql-python
+    if mssql_python:
+        try:
+            conn = _connect_mssql_python(
+                host, port, username, password, database, timeout_seconds
+            )
+            return conn, "mssql-python", None
+        except Exception as e:
+            errors.append(f"mssql-python: {e}")
+
+    return None, "none", "; ".join(errors)
+
+
+# --- Execution with transaction sandbox ---
+
+
 def _safe_execute_with_rollback(
-    conn: pyodbc.Connection,
+    conn: Any,
     sql: str,
-    params: Optional[Tuple] = None,
+    params: Optional[tuple] = None,
     max_rows: Optional[int] = None,
     timeout: Optional[int] = None,
 ) -> Dict[str, Any]:
-    cur = conn.cursor()
+    """Execute SQL while ensuring changes are rolled back. Works with pytds/pyodbc/mssql-python connections.
+
+    Strategy:
+      - If the connection object supports `autocommit`, set it to False.
+      - Otherwise, send `BEGIN TRANSACTION` explicitly.
+      - Execute the query, fetch results, then always `ROLLBACK` at the end.
+    """
+    cursor = None
+    result: Dict[str, Any] = {}
     try:
-        # Ensure we are in a transaction sandbox
-        conn.autocommit = False
-        if timeout:
-            # pyodbc allows setting timeout on cursor
-            cur.timeout = timeout
-        if params:
-            cur.execute(sql, params)
+        cursor = conn.cursor()
+        # attempt to set timeout on cursor if supported
+        if timeout and hasattr(cursor, "timeout"):
+            try:
+                cursor.timeout = int(timeout)
+            except Exception:
+                pass
+
+        # Begin transaction if autocommit not available or True
+        autocommit_used = False
+        if hasattr(conn, "autocommit"):
+            try:
+                # remember prev value
+                prev_auto = getattr(conn, "autocommit")
+                conn.autocommit = False
+                autocommit_used = True
+            except Exception:
+                autocommit_used = False
         else:
-            cur.execute(sql)
-        cols = [column[0] for column in cur.description] if cur.description else []
-        rows = cur.fetchmany(max_rows) if max_rows else cur.fetchall()
+            # Explicitly begin transaction
+            try:
+                cursor.execute("BEGIN TRANSACTION")
+            except Exception:
+                # Some drivers may not accept BEGIN; ignore and continue
+                pass
+
+        if params:
+            cursor.execute(sql, params)
+        else:
+            cursor.execute(sql)
+
+        cols = [c[0] for c in cursor.description] if cursor.description else []
+        if max_rows:
+            rows = cursor.fetchmany(max_rows)
+        else:
+            rows = cursor.fetchall()
         result = {"columns": cols, "rows": [list(r) for r in rows]}
+
     except Exception as e:
         result = {"error": str(e), "trace": traceback.format_exc()}
     finally:
+        # Always rollback to avoid persistent changes
         try:
-            conn.rollback()  # rollback any changes
+            # prefer native rollback
+            if hasattr(conn, "rollback"):
+                conn.rollback()
+            else:
+                # Try issuing ROLLBACK TRANSACTION
+                try:
+                    if cursor:
+                        cursor.execute("ROLLBACK TRANSACTION")
+                except Exception:
+                    pass
         except Exception:
             pass
+
+        # restore autocommit if we changed it
         try:
-            conn.autocommit = True
+            if autocommit_used and hasattr(conn, "autocommit"):
+                conn.autocommit = prev_auto
         except Exception:
             pass
+
     return result
 
 
@@ -115,6 +313,7 @@ def mssql_agent_tool(
     username: Optional[str] = None,
     password: Optional[str] = None,
     database: Optional[str] = None,
+    # ODBC driver string used if falling back to pyodbc
     driver: str = "ODBC Driver 17 for SQL Server",
     trusted_connection: bool = False,
     # agent-driven params
@@ -132,31 +331,36 @@ def mssql_agent_tool(
     """
     Accepts high-level intents or agent-generated SQL and returns validation + results.
 
-    Default safe behavior: dry_run=True and allow_agent_sql=False. To let agent run queries,
-    set allow_agent_sql=True and dry_run=False (and consider allow_destructive=False still).
+    Default safe behavior: dry_run=True and allow_agent_sql=False. To allow agent-run SQL,
+    set allow_agent_sql=True and dry_run=False (and carefully control allow_destructive).
     """
-    server = f"{host},{port}" if port else host
-    if trusted_connection:
-        conn_str = f"DRIVER={{{driver}}};SERVER={server};DATABASE={database or 'master'};Trusted_Connection=yes;"
-    else:
-        conn_str = f"DRIVER={{{driver}}};SERVER={server};DATABASE={database or 'master'};UID={username};PWD={password};"
-
     out: Dict[str, Any] = {
-        "connection": "REDACTED" if not trusted_connection else conn_str,
+        "backend": None,
+        "connection": None,
         "planned": [],
         "executed": [],
         "errors": [],
     }
 
-    try:
-        conn = pyodbc.connect(conn_str, timeout=timeout_seconds or 30)
-    except Exception as e:
-        return {
-            "success": False,
-            "error": "failed to connect",
-            "details": str(e),
-            "trace": traceback.format_exc(),
-        }
+    conn, backend, err = _connect_any(
+        host,
+        port,
+        username,
+        password,
+        database,
+        driver,
+        trusted_connection,
+        timeout_seconds,
+    )
+    out["backend"] = backend
+    if conn is None:
+        out["success"] = False
+        out["error"] = "failed to connect"
+        out["details"] = err
+        return out
+
+    # Redact sensitive info for output
+    out["connection"] = f"connected_via={backend}"
 
     # Intent mapping (extendable)
     intent_map = {
@@ -191,11 +395,7 @@ def mssql_agent_tool(
                     out["executed"].append(rec)
             else:
                 out["planned"].append(
-                    {
-                        "intent": intent,
-                        "queries": [],
-                        "note": "unknown intent — agent should provide SQL or request help",
-                    }
+                    {"intent": intent, "queries": [], "note": "unknown intent"}
                 )
 
     # Handle agent-supplied SQL
@@ -229,7 +429,7 @@ def mssql_agent_tool(
     return out
 
 
-# Backward-compatible small helper if you prefer the older function name
+# Backward-compatible helper
 def mssql_tool(*args, **kwargs):
     return mssql_agent_tool(*args, **kwargs)
 
@@ -254,3 +454,91 @@ def make_langchain_tool():
         return _wrapped
     except Exception:
         return mssql_agent_tool
+
+
+if __name__ == "__main__":
+    import json
+
+    print(
+        "MSSQL agent tool quick-tester (SAFE defaults: dry_run=True, agent SQL blocked)"
+    )
+    host = input("Host (IP/hostname): ").strip()
+    port_raw = input("Port (enter for default 1433): ").strip()
+    port = int(port_raw) if port_raw else None
+    user = (
+        input("Username (leave empty for integrated/trusted if supported): ").strip()
+        or None
+    )
+    pwd = None
+    if user:
+        from getpass import getpass
+
+        pwd = getpass("Password (input hidden): ")
+
+    db = input("Database (enter for 'master'): ").strip() or None
+
+    # Default flags
+    dry_run_choice = (
+        input(
+            "Dry run (queries will be executed inside transaction and rolled back)? [Y/n]: "
+        )
+        .strip()
+        .lower()
+    )
+    dry_run = False if dry_run_choice in ("n", "no") else True
+
+    allow_agent_sql_choice = (
+        input("Allow agent-supplied SQL execution? (DANGEROUS) [no]: ").strip().lower()
+    )
+    allow_agent_sql = True if allow_agent_sql_choice in ("y", "yes") else False
+
+    allow_destructive_choice = (
+        input("Allow destructive statements if detected? (HIGH RISK) [no]: ")
+        .strip()
+        .lower()
+    )
+    allow_destructive = True if allow_destructive_choice in ("y", "yes") else False
+
+    print("\nRunning safe intents (check_version, list_tables) ...\n")
+    res = mssql_agent_tool(
+        host=host,
+        port=port,
+        username=user,
+        password=pwd,
+        database=db,
+        dry_run=dry_run,
+        intents=["check_version", "list_tables"],
+        allow_agent_sql=allow_agent_sql,
+        allow_destructive=allow_destructive,
+        timeout_seconds=30,
+        max_rows=50,
+    )
+
+    print("=== RESULT ===")
+    print(json.dumps(res, indent=2, ensure_ascii=False))
+
+    # Optionally allow issuing a custom (non-destructive) query for quick testing
+    ask_custom = (
+        input("\nDo you want to try a custom SELECT query now? [y/N]: ").strip().lower()
+    )
+    if ask_custom in ("y", "yes"):
+        custom = input("Enter SQL (SELECT only recommended): ").strip()
+        custom_res = mssql_agent_tool(
+            host=host,
+            port=port,
+            username=user,
+            password=pwd,
+            database=db,
+            dry_run=dry_run,
+            custom_queries=[custom],
+            allow_agent_sql=allow_agent_sql,
+            allow_destructive=allow_destructive,
+            timeout_seconds=30,
+            max_rows=200,
+        )
+        print("=== CUSTOM QUERY RESULT ===")
+        print(json.dumps(custom_res, indent=2, ensure_ascii=False))
+
+    print(
+        "\nTest complete. Remember: use allow_agent_sql=False and dry_run=True for safe exploration."
+    )

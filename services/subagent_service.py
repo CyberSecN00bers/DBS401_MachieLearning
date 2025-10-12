@@ -11,10 +11,19 @@ class SubAgentService:
         name: str,
         description: str,
         prompt: str,
-        tools: Optional[List[BaseTool]] = None,
+        tools: Optional[List[Union[BaseTool, callable]]] = None,
         model: Optional[Union[LanguageModelLike, dict[str, Any]]] = None,
     ):
-        tool_configs = {tool.__name__: True for tool in tools} if tools else None
+        tool_configs = (
+            {
+                getattr(
+                    tool, "name", getattr(tool, "__name__", tool.__class__.__name__)
+                ): True
+                for tool in tools
+            }
+            if tools
+            else None
+        )
         return SubAgentService.create_subagent_with_human_in_the_loop(
             name, description, prompt, tools, model, tool_configs
         )

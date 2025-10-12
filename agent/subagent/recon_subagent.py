@@ -2,12 +2,14 @@ from services.subagent_service import SubAgentService
 from agent.prompt.subagent_prompt import RECON_PROMPT
 from tools.nmap import nmap_tool
 from tools.sqlmap import sqlmap_tool
+from tools.authenticate import mssql_check_credentials
+from deepagents.tools import ls, read_file, write_file, edit_file
 
 
 NAME = "recon"
 DESCRIPTION = "Network & service discovery"
 PROMPT = RECON_PROMPT
-DEFAULT_TOOLS = [nmap_tool]
+DEFAULT_TOOLS = [nmap_tool, ls, read_file, write_file, edit_file, mssql_check_credentials]
 
 
 def make_subagent(tools: list = []):

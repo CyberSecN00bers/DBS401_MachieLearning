@@ -158,11 +158,16 @@ def print_format_chunk(chunk) -> dict:
                 )
                 rich.print(chunk["SummarizationMiddleware.before_model"])
         case "HumanInTheLoopMiddleware.after_model":
-            if chunk["HumanInTheLoopMiddleware.after_model"]:
-                print(
-                    f"{Fore.CYAN} HumanInTheLoopMiddleware After Model Hook: {Style.RESET_ALL}"
-                )
-                rich.print(chunk["HumanInTheLoopMiddleware.after_model"])
+            if not chunk["HumanInTheLoopMiddleware.after_model"]:
+                return
+
+            print(
+                f"{Fore.CYAN} HumanInTheLoopMiddleware After Model Hook: {Style.RESET_ALL}"
+            )
+            for key in chunk["HumanInTheLoopMiddleware.after_model"]:
+                if key == "messages":
+                    for message in chunk["HumanInTheLoopMiddleware.after_model"][key]:
+                        render_markdown(message.content)
         case "__interrupt__":
             print(f"{Fore.CYAN}Interrupts: {Style.RESET_ALL}")
             interrupts = chunk["__interrupt__"]

@@ -8,8 +8,14 @@ dependencies = [
     "colorama>=0.4.6",
     "deepagents==0.0.9",
     "langchain[google-genai]>=1.0.0a9",
+    "mssql-python>=0.12.0",
     "pydantic-settings>=2.11.0",
+    "pymssql>=2.3.7",
     "pyodbc>=5.2.0",
     "python-dotenv>=1.1.1",
+    "python-tds",
     "rich>=14.1.0",
 ]
+
+[tool.uv.sources]
+python-tds = { git = "https://github.com/denisenkom/pytds.git" }

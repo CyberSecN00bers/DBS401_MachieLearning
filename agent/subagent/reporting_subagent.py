@@ -2,12 +2,13 @@ from services.subagent_service import SubAgentService
 from agent.prompt.subagent_prompt import REPORT_PROMPT
 from tools.nmap import nmap_tool
 from tools.sqlmap import sqlmap_tool
+from deepagents.tools import ls, read_file, write_file, edit_file
 
 
 NAME = "reporting"
 DESCRIPTION = "Reporting & remediation"
 PROMPT = REPORT_PROMPT
-DEFAULT_TOOLS = []
+DEFAULT_TOOLS = [ls, read_file, write_file, edit_file]
 
 
 def make_subagent(tools: list = []):
