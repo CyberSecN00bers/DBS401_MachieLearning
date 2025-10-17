@@ -1,7 +1,9 @@
 from colorama import Fore, Style, init
-from typing import Literal
+from typing import Literal, Optional, Callable, Dict, List, Any
 from enum import Enum
 import json
+import os
+import platform
 
 # Print the markdown
 import rich
@@ -11,6 +13,14 @@ from rich.console import Console
 
 # Initialize colorama for cross-platform support
 init(autoreset=True)
+
+
+def clear_screen() -> None:
+    """Clears the terminal screen in a cross-platform way."""
+    if platform.system() == "Windows":
+        os.system('cls')
+    else:
+        os.system('clear')
 
 
 class LogLevel(Enum):
@@ -33,8 +43,22 @@ def notify(message: str, level: LogLevel = LogLevel.INFO) -> None:
     print(f"[{level_str}{Style.RESET_ALL}] {message}")
 
 
-def safe_input(prompt: str, validator: callable = None, default: str = None) -> str:
-    """Prompts the user for input and handles KeyboardInterrupt gracefully."""
+def safe_input(
+    prompt: str, 
+    validator: Optional[Callable[[str], bool]] = None, 
+    default: Optional[str] = None
+) -> str:
+    """
+    Prompts the user for input and handles KeyboardInterrupt gracefully.
+    
+    Args:
+        prompt: The prompt message to display
+        validator: Optional validation function that returns True if input is valid
+        default: Optional default value to use if user provides empty input
+        
+    Returns:
+        str: The validated user input
+    """
     try:
         if validator:
             while True:
@@ -57,15 +81,34 @@ def safe_input(prompt: str, validator: callable = None, default: str = None) -> 
         exit(0)
 
 
-def format_json_output(data: dict) -> None:
-    """Formats and prints a dictionary as a JSON-like structure."""
+def format_json_output(data: Dict[str, Any]) -> None:
+    """
+    Formats and prints a dictionary as a JSON-like structure.
+    
+    Args:
+        data: Dictionary to format and print
+    """
     print(Fore.MAGENTA + json.dumps(data, indent=2) + Style.RESET_ALL)
 
 
 def safe_parse_int_input(
-    prompt: str, min_value: int = None, max_value: int = None, default: int = None
+    prompt: str, 
+    min_value: Optional[int] = None, 
+    max_value: Optional[int] = None, 
+    default: Optional[int] = None
 ) -> int:
-    """Prompts the user for an integer input and handles KeyboardInterrupt gracefully."""
+    """
+    Prompts the user for an integer input and handles KeyboardInterrupt gracefully.
+    
+    Args:
+        prompt: The prompt message to display
+        min_value: Optional minimum allowed value
+        max_value: Optional maximum allowed value
+        default: Optional default value if user provides empty input
+        
+    Returns:
+        int: The validated integer input
+    """
     while True:
         try:
             user_input = safe_input(prompt, default=default)
@@ -81,32 +124,84 @@ def safe_parse_int_input(
             notify("Invalid input. Please enter a valid integer.", LogLevel.ERROR)
 
 
-def print_menu(menu_items: list[str], title: str) -> None:
-    """Prints a formatted menu from a list of items with a custom title."""
+def print_menu(menu_items: List[str], title: str) -> None:
+    """
+    Prints a formatted menu from a list of items with a custom title.
+    
+    Args:
+        menu_items: List of menu item strings to display
+        title: Title to display above the menu
+    """
     print(f"{Fore.CYAN}{title}{Style.RESET_ALL}")
     for index, item in enumerate(menu_items, start=1):
         print(f"{Fore.GREEN}{index}. {item}{Style.RESET_ALL}")
 
 
-def print_todo_list_and_status(todo_list: list[dict]) -> None:
-    # Print title
-    print(f"{Fore.CYAN}Todo List:{Style.RESET_ALL}")
+def print_todo_list_and_status(todo_list: List[Dict[str, Any]]) -> None:
+    """
+    Prints a formatted todo list with status indicators.
+    
+    Args:
+        todo_list: List of todo items, each with 'status' and 'content' keys
+    """
+    # Print title with separator
+    print(f"\n{Fore.CYAN}{'='*80}{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}📋 PENETRATION TEST PHASES{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}{'='*80}{Style.RESET_ALL}\n")
+    
     for idx, item in enumerate(todo_list, start=1):
-        status_color = Fore.GREEN if item.get("status") == "completed" else Fore.YELLOW
-        status_badge = "✅" if item.get("status") == "completed" else "⏳"
-        status = f"[{status_badge} {status_color}{item.get('status').upper()}{Style.RESET_ALL}]"
-        print(f"  {idx}. {status:<30} {item.get('content')}")
+        status = item.get("status", "pending").lower()
+        content = item.get("content", "Unknown phase")
+        
+        # Choose emoji and color based on status
+        if status == "completed":
+            status_badge = "✅"
+            status_color = Fore.GREEN
+            status_text = "COMPLETED"
+        elif status == "in_progress":
+            status_badge = "🔄"
+            status_color = Fore.YELLOW
+            status_text = "IN PROGRESS"
+        else:
+            status_badge = "⏳"
+            status_color = Fore.WHITE
+            status_text = "PENDING"
+        
+        # Format the line with proper spacing
+        status_str = f"{status_badge} {status_color}{status_text:12}{Style.RESET_ALL}"
+        print(f"  {Fore.CYAN}{idx}.{Style.RESET_ALL} {status_str} {content}")
+    
+    print(f"\n{Fore.CYAN}{'='*80}{Style.RESET_ALL}\n")
 
 
-def render_markdown(message: str, prefix: str = "  - "):
+def render_markdown(message: str, prefix: str = "") -> None:
+    """
+    Renders markdown text to the console.
+    
+    Args:
+        message: Markdown text to render
+        prefix: Prefix to display before the markdown content
+    """
+    if not message or not message.strip():
+        return
+        
     md = Markdown(message)
     console = Console()
-    console.print(prefix, end="")
+    
+    if prefix:
+        console.print(prefix, end="")
+    
     console.print(md)
     console.print()
 
 
-def print_task_tool_call(task: dict):
+def print_task_tool_call(task: Dict[str, Any]) -> None:
+    """
+    Prints formatted information about a task tool call.
+    
+    Args:
+        task: Task dictionary containing args with subagent_type and description
+    """
     args = task.get("args")
     subagent_type = args.get("subagent_type")
     description = args.get("description")
@@ -116,8 +211,17 @@ def print_task_tool_call(task: dict):
     print()
 
 
-def print_tool_calls(tool_calls: list[dict]):
-    print(f"{Fore.CYAN}Tool Calls:{Style.RESET_ALL}")
+def print_tool_calls(tool_calls: List[Dict[str, Any]]) -> None:
+    """
+    Prints formatted information about tool calls.
+    
+    Args:
+        tool_calls: List of tool call dictionaries
+    """
+    print(f"\n{Fore.YELLOW}{'─'*80}{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}🔧 TOOL CALLS{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}{'─'*80}{Style.RESET_ALL}\n")
+    
     for tool_call in tool_calls:
         if tool_call.get("name") == "write_todos":
             print_todo_list_and_status(tool_call.get("args").get("todos"))
@@ -125,57 +229,138 @@ def print_tool_calls(tool_calls: list[dict]):
         if tool_call.get("name") == "task":
             print_task_tool_call(tool_call)
             continue
-        print(f"  - {tool_call}")
+        
+        # Format regular tool calls
+        tool_name = tool_call.get("name", "unknown")
+        tool_args = tool_call.get("args", {})
+        
+        print(f"  {Fore.CYAN}►{Style.RESET_ALL} {Fore.GREEN}{tool_name}{Style.RESET_ALL}")
+        
+        # Print arguments in a clean format
+        if tool_args:
+            for key, value in tool_args.items():
+                # Truncate long values
+                value_str = str(value)
+                if len(value_str) > 100:
+                    value_str = value_str[:97] + "..."
+                print(f"    {Fore.WHITE}{key}:{Style.RESET_ALL} {value_str}")
+        print()
+    
+    print(f"{Fore.YELLOW}{'─'*80}{Style.RESET_ALL}\n")
 
 
-def print_format_chunk(chunk) -> dict:
+def print_format_chunk(chunk: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Formats and prints a chunk from the agent stream.
+    
+    Args:
+        chunk: Chunk dictionary from agent stream
+        
+    Returns:
+        Dict[str, Any]: The original chunk for chaining
+    """
     chunk_src = list(chunk.keys())[0]
     match chunk_src:
         case "model_request":
-            print(f"{Fore.CYAN}Agent messages: {Style.RESET_ALL}")
+            # Agent is making a request/thinking
+            print(f"\n{Fore.BLUE}{'='*80}{Style.RESET_ALL}")
+            print(f"{Fore.BLUE}🤖 AGENT MESSAGE{Style.RESET_ALL}")
+            print(f"{Fore.BLUE}{'='*80}{Style.RESET_ALL}\n")
+            
             for message in chunk["model_request"]["messages"]:
-                render_markdown(message.content)
-                # additional_kwargs = message.additional_kwargs
-                # if additional_kwargs:
-                #     print(f"{Fore.CYAN}Additional kwargs: {Style.RESET_ALL}")
-                #     print(additional_kwargs)
+                if message.content and message.content.strip():
+                    render_markdown(message.content, prefix="")
+                
                 tool_calls = message.tool_calls
                 if tool_calls:
                     print_tool_calls(tool_calls)
+                    
         case "tools":
-            # print(f"{Fore.CYAN}Tools: {Style.RESET_ALL}")
+            # Tool execution results
+            print(f"\n{Fore.GREEN}{'='*80}{Style.RESET_ALL}")
+            print(f"{Fore.GREEN}✅ TOOL RESULTS{Style.RESET_ALL}")
+            print(f"{Fore.GREEN}{'='*80}{Style.RESET_ALL}\n")
+            
             for tool in chunk["tools"]:
                 if tool == "todos":
-                    # print_todo_list_and_status(chunk["tools"][tool])
-                    continue
+                    continue  # Already shown in tool calls
                 if tool == "messages":
                     continue
-                rich.print(f"  - {tool}: {chunk['tools'][tool]}")
+                
+                tool_result = chunk["tools"][tool]
+                print(f"  {Fore.CYAN}►{Style.RESET_ALL} {Fore.GREEN}{tool}{Style.RESET_ALL}")
+                
+                # Format tool results
+                if isinstance(tool_result, dict):
+                    for key, value in tool_result.items():
+                        value_str = str(value)
+                        if len(value_str) > 200:
+                            value_str = value_str[:197] + "..."
+                        print(f"    {Fore.WHITE}{key}:{Style.RESET_ALL} {value_str}")
+                elif isinstance(tool_result, list):
+                    for item in tool_result[:5]:  # Show first 5 items
+                        print(f"    • {item}")
+                    if len(tool_result) > 5:
+                        print(f"    ... and {len(tool_result) - 5} more items")
+                else:
+                    print(f"    {tool_result}")
+                print()
+            
+            print(f"{Fore.GREEN}{'='*80}{Style.RESET_ALL}\n")
+            
         case "SummarizationMiddleware.before_model":
             if chunk["SummarizationMiddleware.before_model"]:
-                print(
-                    f"{Fore.CYAN} SummarizationMiddleware Before Model Hook: {Style.RESET_ALL}"
-                )
+                print(f"\n{Fore.MAGENTA}📝 Summarization Hook{Style.RESET_ALL}")
                 rich.print(chunk["SummarizationMiddleware.before_model"])
+                print()
+                
         case "HumanInTheLoopMiddleware.after_model":
             if not chunk["HumanInTheLoopMiddleware.after_model"]:
-                return
-
-            print(
-                f"{Fore.CYAN} HumanInTheLoopMiddleware After Model Hook: {Style.RESET_ALL}"
-            )
+                return chunk
+                
+            # Human approval needed
+            print(f"\n{Fore.YELLOW}{'='*80}{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}⚠️  HUMAN APPROVAL REQUIRED{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}{'='*80}{Style.RESET_ALL}\n")
+            
             for key in chunk["HumanInTheLoopMiddleware.after_model"]:
                 if key == "messages":
                     for message in chunk["HumanInTheLoopMiddleware.after_model"][key]:
-                        render_markdown(message.content)
+                        if message.content and message.content.strip():
+                            render_markdown(message.content, prefix="")
+                            
         case "__interrupt__":
-            print(f"{Fore.CYAN}Interrupts: {Style.RESET_ALL}")
+            # Interruption for approval
+            print(f"\n{Fore.RED}{'='*80}{Style.RESET_ALL}")
+            print(f"{Fore.RED}🛑 TOOL EXECUTION REQUIRES APPROVAL{Style.RESET_ALL}")
+            print(f"{Fore.RED}{'='*80}{Style.RESET_ALL}\n")
+            
             interrupts = chunk["__interrupt__"]
             for interrupt in interrupts:
                 for value in interrupt.value:
-                    rich.print(value.get("description"))
+                    description = value.get("description", "")
+                    tool_name = value.get("name", "Unknown Tool")
+                    tool_args = value.get("args", {})
+                    
+                    if description:
+                        print(f"{Fore.YELLOW}{description}{Style.RESET_ALL}\n")
+                    
+                    print(f"  {Fore.CYAN}Tool:{Style.RESET_ALL} {Fore.GREEN}{tool_name}{Style.RESET_ALL}")
+                    print(f"  {Fore.CYAN}Args:{Style.RESET_ALL}")
+                    
+                    for key, val in tool_args.items():
+                        val_str = str(val)
+                        if len(val_str) > 100:
+                            val_str = val_str[:97] + "..."
+                        print(f"    {Fore.WHITE}{key}:{Style.RESET_ALL} {val_str}")
+                    print()
+            
         case _:
-            rich.print(chunk)
+            # Unknown chunk type - minimal output
+            if chunk_src not in ["todos"]:  # Skip known silent types
+                print(f"\n{Fore.MAGENTA}[{chunk_src}]{Style.RESET_ALL}")
+                rich.print(chunk)
+                print()
 
     return chunk
 

@@ -1,9 +1,19 @@
+import sys
+import os
 from dotenv import load_dotenv
-from deepagents import create_deep_agent
+
+# Check deepagents availability before proceeding
+try:
+    from deepagents import create_deep_agent
+except ImportError:
+    print("\n[ERROR] deepagents package not found!")
+    print("Please install dependencies using: uv sync")
+    print("Or: pip install deepagents")
+    sys.exit(1)
 
 # Internal
 from utils.system_check import check_system
-from services.io_service import safe_input, banner, safe_parse_int_input, notify
+from services.io_service import safe_input, banner, safe_parse_int_input, notify, clear_screen
 from utils.installer import install_dependencies
 from services.validator_service import is_valid_ip, is_valid_url
 
@@ -24,14 +34,31 @@ from tools.authenticate import mssql_check_credentials
 
 
 # ================================================= setup =================================================
+# Load environment variables
+load_dotenv()
+
+# Check system and install missing dependencies
 SYSTEM_INFO = check_system()
 install_dependencies(
     SYSTEM_INFO["missing_system_packages"], SYSTEM_INFO["missing_python_packages"]
 )
 
+# Setup logging
 import logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('pentest.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
-# logging.basicConfig(level=logging.DEBUG)
+# Suppress verbose logging from third-party libraries
+logging.getLogger('pytds').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+logging.getLogger('requests').setLevel(logging.WARNING)
 
 
 # ================================================= banner =================================================

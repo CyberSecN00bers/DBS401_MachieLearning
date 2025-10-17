@@ -25,11 +25,22 @@ import json
 import uuid
 import time
 import os
+import logging
 from typing import Any, Dict, List, Optional
 
-from deepagents import create_deep_agent
+# Check deepagents availability
+try:
+    from deepagents import create_deep_agent
+except ImportError:
+    print("\n[ERROR] deepagents package not found!")
+    print("Please install dependencies using: uv sync")
+    raise
+
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
+
+# Setup logger for this module
+logger = logging.getLogger(__name__)
 
 
 # Internal
@@ -72,28 +83,56 @@ def make_subagents() -> List[Dict[str, Any]]:
 def build_deep_agent_with_subagents(
     all_tools: List[Any], instructions: str, subagents: List[Dict[str, Any]]
 ):
-    """Create a single deep agent and pass subagents list to create_deep_agent per README schema."""
+    """
+    Create a single deep agent and pass subagents list to create_deep_agent per README schema.
+    
+    Args:
+        all_tools: List of tool functions available to the agent
+        instructions: System instructions for the agent
+        subagents: List of subagent configurations
+        
+    Returns:
+        The configured deep agent with checkpointer
+    """
+    logger.info("Building deep agent with %d tools and %d subagents", 
+                len(all_tools), len(subagents))
+    
     # Require HITL for all tool calls by name
     tool_configs = {tool.__name__: True for tool in all_tools}
+    
+    try:
+        from langchain.chat_models import init_chat_model
 
-    from langchain.chat_models import init_chat_model
+        llm = init_chat_model(model="gemini-2.0-flash", model_provider="google_genai")
+        agent = create_deep_agent(
+            all_tools,
+            instructions,
+            subagents=subagents,
+            tool_configs=tool_configs,
+            model=llm,
+        )
 
-    llm = init_chat_model(model="gemini-2.0-flash", model_provider="google_genai")
-    agent = create_deep_agent(
-        all_tools,
-        instructions,
-        subagents=subagents,
-        tool_configs=tool_configs,
-        model=llm,
-    )
-
-    # Attach in-memory checkpointer required for pause/resume
-    agent.checkpointer = InMemorySaver()
-
-    return agent
+        # Attach in-memory checkpointer required for pause/resume
+        agent.checkpointer = InMemorySaver()
+        
+        logger.info("Deep agent successfully built")
+        return agent
+        
+    except Exception as e:
+        logger.error("Failed to build deep agent: %s", str(e), exc_info=True)
+        raise
 
 
 def is_tool_calling(chunk: dict) -> bool:
+    """
+    Check if a chunk indicates a tool calling request.
+    
+    Args:
+        chunk: Stream chunk dictionary
+        
+    Returns:
+        bool: True if chunk indicates tool calling
+    """
     try:
         # Check for interrupt chunk
         if isinstance(chunk, dict) and "__interrupt__" in chunk:
@@ -107,41 +146,75 @@ def is_tool_calling(chunk: dict) -> bool:
                     return True
         return False
     except Exception as e:
-        raise e
+        logger.error("Error checking tool calling status: %s", str(e))
+        raise
 
 
 def run_orchestration(agent, high_level_prompt: str):
-    """Run the main agent interactively. The main agent will call subagents (by name) for specific phases.
+    """
+    Run the main agent interactively. The main agent will call subagents (by name) for specific phases.
 
     This function listens for interrupts (proposed tool calls) and forces operator approval.
     For each proposed tool call we append audit entries and resume the agent with the operator decision.
+    
+    Args:
+        agent: The configured deep agent
+        high_level_prompt: Initial prompt to start the orchestration
     """
-    # Start streaming the agent until it pauses for HITL
-    config = {"configurable": {"thread_id": str(uuid.uuid4())}, "recursion_limit": 100}
-    next_input = {"messages": [{"role": "user", "content": high_level_prompt}]}
+    logger.info("Starting orchestration with prompt")
+    
+    try:
+        # Start streaming the agent until it pauses for HITL
+        config = {"configurable": {"thread_id": str(uuid.uuid4())}, "recursion_limit": 100}
+        next_input = {"messages": [{"role": "user", "content": high_level_prompt}]}
 
-    while True:
-        last_chunk = None
-        for chunk in agent.stream(next_input, config=config):
-            # print("STREAM->", chunk)
-            last_chunk = dict(chunk)
-            print_format_chunk(last_chunk)
+        iteration = 0
+        while True:
+            iteration += 1
+            logger.debug("Orchestration iteration %d", iteration)
+            
+            last_chunk = None
+            try:
+                for chunk in agent.stream(next_input, config=config):
+                    last_chunk = dict(chunk)
+                    print_format_chunk(last_chunk)
+            except Exception as e:
+                logger.error("Error during agent stream: %s", str(e), exc_info=True)
+                notify(f"Agent stream error: {str(e)}", LogLevel.ERROR)
+                break
 
-        if last_chunk is None:
-            print("No chunks produced. Agent probably finished or returned nothing.")
-            break
+            if last_chunk is None:
+                logger.warning("No chunks produced. Agent probably finished or returned nothing.")
+                print("No chunks produced. Agent probably finished or returned nothing.")
+                break
 
-        if not is_tool_calling(last_chunk):
-            notify(
-                "End of the stream. But it doesn't have a tool calling request.",
-                LogLevel.ERROR,
-            )
-            print(last_chunk)
-            break
+            if not is_tool_calling(last_chunk):
+                logger.info("End of stream without tool calling request")
+                notify(
+                    "End of the stream. But it doesn't have a tool calling request.",
+                    LogLevel.ERROR,
+                )
+                print(last_chunk)
+                break
 
-        resume_payload = HumanInTheLoopService.prompt_human_for_resume_cli()
+            try:
+                resume_payload = HumanInTheLoopService.prompt_human_for_resume_cli()
+                logger.info("Human decision received: %s", resume_payload[0].get("type"))
+            except Exception as e:
+                logger.error("Error getting human decision: %s", str(e), exc_info=True)
+                notify(f"Error getting input: {str(e)}", LogLevel.ERROR)
+                break
 
-        # Resume the agent with the operator's decision
-        next_input = Command(resume=resume_payload)
+            # Resume the agent with the operator's decision
+            next_input = Command(resume=resume_payload)
 
-    print("Top-level orchestration complete.")
+        logger.info("Top-level orchestration complete after %d iterations", iteration)
+        print("Top-level orchestration complete.")
+        
+    except KeyboardInterrupt:
+        logger.warning("Orchestration interrupted by user")
+        notify("Orchestration interrupted by user", LogLevel.WARN)
+    except Exception as e:
+        logger.error("Fatal error in orchestration: %s", str(e), exc_info=True)
+        notify(f"Fatal error: {str(e)}", LogLevel.ERROR)
+        raise
