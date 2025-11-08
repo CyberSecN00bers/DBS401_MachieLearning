@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Penetration Test Report</title>
+    <style>
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        .section {
+            background: white;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .finding {
+            border-left: 4px solid #e74c3c;
+            padding-left: 15px;
+            margin: 15px 0;
+        }
+        .severity-critical { border-left-color: #c0392b; background-color: #fadbd8; }
+        .severity-high { border-left-color: #e74c3c; background-color: #f9ebea; }
+        .severity-medium { border-left-color: #f39c12; background-color: #fef5e7; }
+        .severity-low { border-left-color: #3498db; background-color: #ebf5fb; }
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #667eea;
+            color: white;
+        }
+        
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Penetration Test Report</h1>
+        <p>Generated: 2025-11-07 20:35:45</p>
+    </div>
+    
+    <div class="section">
+        <h2>Executive Summary</h2>
+        <p>{EXECUTIVE_SUMMARY}</p>
+    </div>
+    
+    <div class="section">
+        <h2>Target Information</h2>
+        <p>{TARGET_INFO}</p>
+    </div>
+    
+    <div class="section">
+        <h2>Findings</h2>
+        {FINDINGS}
+    </div>
+    
+    <div class="section">
+        <h2>Recommendations</h2>
+        {RECOMMENDATIONS}
+    </div>
+    
+    <div class="section">
+        <h2>Technical Details</h2>
+        {TECHNICAL_DETAILS}
+    </div>
+</body>
+</html>

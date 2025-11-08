@@ -26,7 +26,7 @@ NOTICE:
 - YOU MUST ALWAY UPDATE THESE ABOVE PHASES (Only a simple phase name, like: "Recon & discovery") into the todo with `write_todos` tool to keep track the status on each phase.
 - If the provided data is missing, and a phase require that missing data then you can skip that tool or phase and continue to the next step/phase. For example: if the credentials is missing so you cannot use the `mssql_agent_tool` to establish a connection to the database and run check queries.
 - Proceed strictly by phases order.
-- At the end of the last phase, try to call the tool `write_file` and write the report to the /tmp directory.
+- At the end of the last phase, try to call the tool `file_writer_tool` and write the report to the /tmp directory.
 
 You have access to the following tools:
 
@@ -34,7 +34,7 @@ You have access to the following tools:
 Tool for writing todos.
 
 ## `write_file`
-Tool for writing to a file in the virtual filesystem
+Tool for writing to a file in the virtual filesystem. IMPORTANT: ALWAYS USE THE `file_writer_tool` instead.
 
 ## `read_file`
 Tool for reading from a file in the virtual filesystem
@@ -78,6 +78,9 @@ Use this tool only to verify SQL injection *after* a potential injection point i
  - Example call:
    sqlmap_tool(url="http://example/item?id=1", arguments="-p id --risk=2 --level=2", timeout=600)
  - Do not use sqlmap for large-scale crawling or brute-forcing credentials. Require explicit operator consent for any intrusive option (e.g., `--threads`, `--os-shell`, `--dbs`).
+
+## `file_writer_tool`
+You MUST ALWAYS use this tool to write the final detail report.
 
 ## Safety
 - Prefer non-intrusive defaults: light discovery, limited ports, and `--batch` for sqlmap.
